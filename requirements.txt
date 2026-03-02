@@ -1,7 +1,8 @@
-vllm==0.13.0
+vllm[audio]==0.13.0
 decorator
 pyyaml
 scipy
+modelscope>=1.18.1
 setuptools <= 79.0.1
 setuptools-scm
 scikit-build-core==0.11

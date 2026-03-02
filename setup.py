@@ -1,5 +1,4 @@
 import os
-from typing import List
 
 from setuptools import find_packages, setup
 
@@ -21,10 +20,10 @@ def read_readme() -> str:
         return ""
 
 
-def get_requirements() -> List[str]:
+def get_requirements() -> list[str]:
     """Get Python package dependencies from requirements.txt."""
 
-    def _read_requirements(filename: str) -> List[str]:
+    def _read_requirements(filename: str) -> list[str]:
         with open(get_path(filename)) as f:
             requirements = f.read().strip().split("\n")
         resolved_requirements = []
@@ -59,7 +58,6 @@ setup(
         "Homepage": "https://github.com/flagos-ai/vllm-plugin-FL",
     },
     classifiers=[
-        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
@@ -74,9 +72,8 @@ setup(
     package_data={
         "vllm_fl.dispatch.config": ["*.yaml"],
     },
-    python_requires=">=3.9",
+    python_requires=">=3.10",
     install_requires=get_requirements(),
-    extras_require={},
     entry_points={
         "vllm.platform_plugins": ["fl = vllm_fl:register"],
         "vllm.general_plugins": ["fl = vllm_fl:register_model"],
