@@ -17,31 +17,31 @@ In theory, vllm-plugin-FL can support all models available in vLLM, as long as n
 
 ### Supported Chips
 
-| Chip Vendor | Status | Reference |
-|-------------|--------|-----------|
-| NVIDIA | Supported | - |
-| Ascend | Merging | [PR #55](https://github.com/flagos-ai/vllm-plugin-FL/pull/55) |
-| MetaX | Merging | [PR #47](https://github.com/flagos-ai/vllm-plugin-FL/pull/47) |
-| Pingtouge-Zhenwu | Supported | - |
-| Iluvatar | Merging | [PR #58](https://github.com/flagos-ai/vllm-plugin-FL/pull/58) |
-| Tsingmicro | Merging | [PR #52](https://github.com/flagos-ai/vllm-plugin-FL/pull/52) |
+| Chip Vendor | Status | Reference | User Guide |
+|-------------|--------|-----------| ---------- |
+| NVIDIA | Supported | - | [Guide](#quick-start) |
+| Ascend | Merging | [PR #55](https://github.com/flagos-ai/vllm-plugin-FL/pull/55) | [Guide](https://github.com/flagos-ai/vllm-plugin-FL/pull/75) |
+| MetaX | Merging | [PR #47](https://github.com/flagos-ai/vllm-plugin-FL/pull/47) | - |
+| Pingtouge-Zhenwu | Supported | - | - |
+| Iluvatar | Merging | [PR #58](https://github.com/flagos-ai/vllm-plugin-FL/pull/58) | - |
+| Tsingmicro | Merging | [PR #52](https://github.com/flagos-ai/vllm-plugin-FL/pull/52) | - |
 
 ## Quick Start
 
 ### Setup
 
-0. Install vllm from the official [v0.13.0](https://github.com/vllm-project/vllm/tree/v0.13.0) (optional if the correct version is installed) or from the fork [vllm-FL](https://github.com/flagos-ai/vllm-FL).
+1. Install vllm from the official [v0.13.0](https://github.com/vllm-project/vllm/tree/v0.13.0) (optional if the correct version is installed) or from the fork [vllm-FL](https://github.com/flagos-ai/vllm-FL).
 
 
-1. Install vllm-plugin-FL
+2. Install vllm-plugin-FL
 
-    1.1 Clone the repository:
+    2.1 Clone the repository:
 
     ```sh
     git clone https://github.com/flagos-ai/vllm-plugin-FL
     ```
 
-    1.2 install
+    2.2 install
     ```sh
     cd vllm-plugin-FL
     pip install -r requirements.txt
@@ -50,15 +50,15 @@ In theory, vllm-plugin-FL can support all models available in vLLM, as long as n
     pip install --no-build-isolation -e .
     ```
 
-2. Install [FlagGems](https://github.com/flagos-ai/FlagGems/blob/master/docs/getting-started.md#quick-installation)
+3. Install [FlagGems](https://github.com/flagos-ai/FlagGems/blob/master/docs/getting-started.md#quick-installation)
 
-    2.1 Install Build Dependencies
+    3.1 Install Build Dependencies
 
     ```sh
     pip install -U scikit-build-core==0.11 pybind11 ninja cmake
     ```
 
-    2.2 Installation FlagGems
+    3.2 Installation FlagGems
 
     ```sh
     git clone https://github.com/flagos-ai/FlagGems
@@ -68,9 +68,9 @@ In theory, vllm-plugin-FL can support all models available in vLLM, as long as n
     pip install --no-build-isolation -e .
     ```
 
-3. Install [FlagCX](https://github.com/flagos-ai/FlagCX/blob/main/docs/getting_started.md#build-and-installation)
+4. (Optional) Install [FlagCX](https://github.com/flagos-ai/FlagCX/blob/main/docs/getting_started.md#build-and-installation)
 
-    3.1 Clone the repository:
+    4.1 Clone the repository:
     ```sh
     git clone https://github.com/flagos-ai/FlagCX.git
     cd FlagCX
@@ -78,17 +78,17 @@ In theory, vllm-plugin-FL can support all models available in vLLM, as long as n
     git submodule update --init --recursive
     ```
 
-    3.2 Build the library with different flags targeting to different platforms:
+    4.2 Build the library with different flags targeting to different platforms:
     ```sh
     make USE_NVIDIA=1
     ```
 
-    3.3 Set environment
+    4.3 Set environment
     ```sh
     export FLAGCX_PATH="$PWD"
     ```
 
-    3.4 Installation FlagCX
+    4.4 Installation FlagCX
     ```sh
     cd plugin/torch/
     FLAGCX_ADAPTOR=[xxx] pip install . --no-build-isolation
