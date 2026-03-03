@@ -77,9 +77,8 @@ This guide provides step‑by‑step instructions to run vLLM model inference on
     
     4.1 install
     ```sh
-    git clone https://github.com/flagos-ai/FlagTree.git
-    cd FlagTree
-    pip install -e .
+    RES="--index-url=https://resource.flagos.net/repository/flagos-pypi-hosted/simple --trusted-host=https://resource.flagos.net"
+    python3 -m pip install flagtree==0.4.0+ascend3.2 $RES
     ```
 
 5. Set Required Environment Variables
