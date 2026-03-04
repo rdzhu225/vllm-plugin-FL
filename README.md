@@ -17,14 +17,14 @@ In theory, vllm-plugin-FL can support all models available in vLLM, as long as n
 
 ### Supported Chips
 
-| Chip Vendor | Status | Reference | User Guide |
-|-------------|--------|-----------| ---------- |
-| NVIDIA | Supported | - | [Guide](#quick-start) |
-| Ascend | Merging | [PR #55](https://github.com/flagos-ai/vllm-plugin-FL/pull/55) | [Guide](https://github.com/flagos-ai/vllm-plugin-FL/pull/75) |
-| MetaX | Merging | [PR #47](https://github.com/flagos-ai/vllm-plugin-FL/pull/47) | - |
-| Pingtouge-Zhenwu | Supported | - | - |
-| Iluvatar | Merging | [PR #58](https://github.com/flagos-ai/vllm-plugin-FL/pull/58) | - |
-| Tsingmicro | Merging | [PR #52](https://github.com/flagos-ai/vllm-plugin-FL/pull/52) | - |
+| Chip Vendor | Status | Reference |
+|-------------|--------|-----------|
+| NVIDIA | Supported | - |
+| Ascend | Merging | [PR #55](https://github.com/flagos-ai/vllm-plugin-FL/pull/55) |
+| MetaX | Merging | [PR #47](https://github.com/flagos-ai/vllm-plugin-FL/pull/47) |
+| Pingtouge-Zhenwu | Supported | - |
+| Iluvatar | Merging | [PR #58](https://github.com/flagos-ai/vllm-plugin-FL/pull/58) |
+| Tsingmicro | Merging | [PR #52](https://github.com/flagos-ai/vllm-plugin-FL/pull/52) |
 
 ## Quick Start
 
@@ -97,6 +97,18 @@ In theory, vllm-plugin-FL can support all models available in vLLM, as long as n
     ```
     Note: [xxx] should be selected according to the current platform, e.g., nvidia, ascend, etc.
 
+5. (Optional, Ascend only) Install [FlagTree](https://resource.flagos.net)
+
+    ```sh
+    RES="--index-url=https://resource.flagos.net/repository/flagos-pypi-hosted/simple --trusted-host=https://resource.flagos.net"
+    python3 -m pip install flagtree==0.4.0+ascend3.2 $RES
+    ```
+
+6. (Optional, Ascend only) Set required environment variables
+
+    ```sh
+    export TRITON_ALL_BLOCKS_PARALLEL=1
+    ```
 
 If there are multiple plugins in the current environment, you can specify use vllm-plugin-fl via VLLM_PLUGINS='fl'.
 
@@ -117,7 +129,7 @@ if __name__ == '__main__':
     # Create a sampling params object.
     sampling_params = SamplingParams(max_tokens=10, temperature=0.0)
     # Create an LLM.
-    llm = LLM(model="Qwen/Qwen3-4B", max_num_batched_tokens=16384, max_num_seqs=2048)
+    llm = LLM(model="Qwen/Qwen3-4B", enforce_eager=True, max_num_batched_tokens=16384, max_num_seqs=2048)
     # Generate texts from the prompts.
     outputs = llm.generate(prompts, sampling_params)
     for output in outputs:
