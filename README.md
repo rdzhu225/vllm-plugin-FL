@@ -97,20 +97,28 @@ In theory, vllm-plugin-FL can support all models available in vLLM, as long as n
     ```
     Note: [xxx] should be selected according to the current platform, e.g., nvidia, ascend, etc.
 
-5. (Optional, Ascend only) Install [FlagTree](https://resource.flagos.net)
+
+If there are multiple plugins in the current environment, you can specify use vllm-plugin-fl via VLLM_PLUGINS='fl'.
+
+### Additional Steps for Ascend
+
+1. Install [FlagTree](https://resource.flagos.net)
 
     ```sh
     RES="--index-url=https://resource.flagos.net/repository/flagos-pypi-hosted/simple --trusted-host=https://resource.flagos.net"
     python3 -m pip install flagtree==0.4.0+ascend3.2 $RES
     ```
 
-6. (Optional, Ascend only) Set required environment variables
+2. Set required environment variable
 
     ```sh
     export TRITON_ALL_BLOCKS_PARALLEL=1
     ```
 
-If there are multiple plugins in the current environment, you can specify use vllm-plugin-fl via VLLM_PLUGINS='fl'.
+3. Enable eager execution
+
+    Ascend requires eager execution. Add `enforce_eager=True` to the `LLM` constructor or pass `--enforce-eager` on the command line.
+
 
 ### Run a Task
 
@@ -129,7 +137,7 @@ if __name__ == '__main__':
     # Create a sampling params object.
     sampling_params = SamplingParams(max_tokens=10, temperature=0.0)
     # Create an LLM.
-    llm = LLM(model="Qwen/Qwen3-4B", enforce_eager=True, max_num_batched_tokens=16384, max_num_seqs=2048)
+    llm = LLM(model="Qwen/Qwen3-4B", max_num_batched_tokens=16384, max_num_seqs=2048)
     # Generate texts from the prompts.
     outputs = llm.generate(prompts, sampling_params)
     for output in outputs:
