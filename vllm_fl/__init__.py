@@ -317,6 +317,9 @@ def register_model():
 
     _register_gdn_packed_decode_patch()
 
+    from vllm_fl.patches.deepseek_v4_quantized_o_proj import install_deepseek_v4_quantized_o_proj
+    install_deepseek_v4_quantized_o_proj()
+
     # Register GLM-5 (GlmMoeDsa) — config not yet upstream
     try:
         from vllm.transformers_utils.config import _CONFIG_REGISTRY
