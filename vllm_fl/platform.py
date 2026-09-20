@@ -95,6 +95,23 @@ class PlatformFL(Platform):
         """Stateless version of [torch.cuda.is_available][]."""
         return self.device_type == "cuda" and self.vendor_name == "nvidia"
 
+    @classmethod
+    def is_arch_support_pdl(cls) -> bool:
+        """Match native CUDA's PDL capability on NVIDIA Hopper and newer.
+
+        The OOT base defaults to False. DeepSeek-V4 uses this capability when
+        supplying launch metadata to its inverse-RoPE/FP8 Triton kernel.
+        Other vendors sharing the CUDA dispatch key must not enable NVIDIA PDL.
+        """
+        if cls.vendor_name != "nvidia" or cls.device_type != "cuda":
+            return False
+        try:
+            device = torch.cuda.current_device()
+            major, _ = torch.cuda.get_device_capability(device)
+        except Exception:
+            return False
+        return major >= 9
+
     def is_musa(self) -> bool:
         if hasattr(torch, 'musa') and torch.musa.is_available():
             return True
