@@ -39,3 +39,21 @@ def test_installer_is_idempotent():
     first = DeepseekV4FlashMLAAttention._o_proj
     assert install_deepseek_v4_quantized_o_proj()
     assert DeepseekV4FlashMLAAttention._o_proj is first
+
+
+def test_native_fp8_projection_is_delegated_unchanged(monkeypatch):
+    from types import SimpleNamespace
+    from vllm_fl.patches.deepseek_v4_quantized_o_proj import install_deepseek_v4_quantized_o_proj
+    from vllm.models.deepseek_v4.nvidia.flashmla import DeepseekV4FlashMLAAttention
+
+    calls = []
+    expected = object()
+    def original(self, inputs, positions):
+        calls.append((self, inputs, positions))
+        return expected
+    monkeypatch.setattr(DeepseekV4FlashMLAAttention, '_o_proj', original)
+    install_deepseek_v4_quantized_o_proj()
+    attention = SimpleNamespace(wo_a=SimpleNamespace(weight_scale_inv=object()))
+    inputs, positions = object(), object()
+    assert DeepseekV4FlashMLAAttention._o_proj(attention, inputs, positions) is expected
+    assert calls == [(attention, inputs, positions)]
