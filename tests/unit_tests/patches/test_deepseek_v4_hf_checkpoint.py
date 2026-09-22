@@ -148,3 +148,72 @@ def test_runtime_mapper_survives_fp8_cache_scale_composition():
     )
     assert (combined | WeightsMapper()).apply_list(names) == expected
     assert mapper.apply_list(["embed.weight"]) == ["model.embed_tokens.weight"]
+
+
+def _mixed_schemes():
+    values = {
+        'model.layers.0.self_attn.q_a_proj': {'bits': 8, 'group_size': 128},
+        'model.layers.0.self_attn.kv_proj': {'bits': 8, 'group_size': 128},
+    }
+    for projection in ['gate_proj', 'up_proj', 'down_proj']:
+        values[f'model.layers.0.mlp.shared_experts.{projection}'] = {'bits': 8, 'group_size': 128}
+        for expert in range(2):
+            values[f'model.layers.0.mlp.experts.{expert}.{projection}'] = {'bits': 4, 'group_size': 128}
+    return values
+
+
+class _Mapper:
+    def _map_name(self, name):
+        return 'model.' + module.hf_to_original_name(name)
+
+    def apply_list(self, names):
+        return [self._map_name(name) for name in names]
+
+
+def test_mixed_gptq_rules_cover_fused_attention_and_separate_shared_experts():
+    schemes, ignored = module.map_gptq_module_schemes(_mixed_schemes(), [], _Mapper(), {
+        'fused_wqa_wkv': ['wq_a', 'wkv'], 'fused_wkv_wgate': ['wkv', 'wgate'],
+        'gate_up_proj': ['w1', 'w3'],
+    })
+    assert schemes['model.layers.0.attn.fused_wqa_wkv']['bits'] == 8
+    assert schemes['model.layers.0.ffn.shared_experts.gate_up_proj']['bits'] == 8
+    assert schemes['model.layers.0.ffn.shared_experts.w2']['bits'] == 8
+    assert schemes['model.layers.0.ffn.experts']['bits'] == 4
+    assert not ignored
+
+
+def test_mixed_gptq_mapper_rejects_inconsistent_fused_precision():
+    schemes = _mixed_schemes()
+    schemes['model.layers.0.self_attn.kv_proj'] = {'bits': 4, 'group_size': 128}
+    with pytest.raises(ValueError, match='Different GPTQ schemes within fused unit'):
+        module.map_gptq_module_schemes(schemes, [], _Mapper(), {'fused_wqa_wkv': ['wq_a', 'wkv']})
+
+
+def test_mixed_gptq_mapper_rejects_partially_selected_fused_projection():
+    schemes = _mixed_schemes()
+    name = 'model.layers.0.self_attn.kv_proj'
+    del schemes[name]
+    with pytest.raises(ValueError, match='Partially quantized'):
+        module.map_gptq_module_schemes(schemes, [name], _Mapper(), {'fused_wqa_wkv': ['wq_a', 'wkv']})
+
+
+def test_actual_auto_gptq_config_applies_hf_and_fused_bit_overrides():
+    pytest.importorskip('vllm')
+    import re
+    from vllm.model_executor.layers.quantization.auto_gptq import AutoGPTQConfig
+    from vllm.model_executor.layers.quantization.utils.gptq_utils import get_dynamic_override, override_config
+    from vllm.models.deepseek_v4.nvidia.model import DeepseekV4ForCausalLM
+    assert module.install_deepseek_v4_hf_checkpoint()
+    mapper = DeepseekV4ForCausalLM.hf_to_vllm_mapper
+    schemes = _mixed_schemes()
+    original = {'bits': 4, 'group_size': 128, 'desc_act': False, 'sym': True,
+                'modules_in_block_to_quantize': list(schemes),
+                'flagos_module_quantization': schemes,
+                'dynamic': {f'+:^{re.escape(name)}$': value for name, value in schemes.items() if value['bits'] == 8}}
+    config = AutoGPTQConfig.from_config(original)
+    config.apply_vllm_mapper(mapper)
+    for prefix in ['model.layers.0.attn.fused_wqa_wkv', 'model.layers.0.ffn.shared_experts.gate_up_proj', 'model.layers.0.ffn.shared_experts.down_proj']:
+        assert get_dynamic_override(config, prefix, 'bits', 4) == 8
+    assert get_dynamic_override(config, 'model.layers.0.ffn.experts', 'bits', 4) == 4
+    override_config(config, 'model.layers.0.attn.fused_wqa_wkv')
+    assert config.weight_bits == 8 and config.pack_factor == 4

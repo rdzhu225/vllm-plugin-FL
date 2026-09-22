@@ -3,6 +3,83 @@
 import re
 
 
+def map_gptq_module_schemes(schemes, unquantized_names, mapper, packed_mapping):
+    """Translate exact module schemes and close native fused execution units."""
+    mapped = {}
+    for source, settings in schemes.items():
+        name = mapper._map_name(source)
+        if name is None:
+            raise ValueError(f"Quantized GPTQ module was dropped by the weight mapper: {source}")
+        if name in mapped and mapped[name] != settings:
+            raise ValueError(f"Conflicting GPTQ schemes map to {name}")
+        mapped[name] = dict(settings)
+    ignored = set(mapper.apply_list(unquantized_names))
+    if ignored & mapped.keys():
+        raise ValueError("A GPTQ module is both quantized and excluded after mapping")
+    all_names = set(mapped) | ignored
+    parents = {name.rsplit('.', 1)[0] for name in all_names if '.' in name}
+    units = {}
+    for parent in parents:
+        for fused, shards in packed_mapping.items():
+            members = {f"{parent}.{shard}" for shard in shards}
+            if members <= all_names:
+                units[f"{parent}.{fused}"] = members
+    # The routed expert bank has one runtime quantization method. Shared
+    # experts remain separate Linear methods and may use another bit width.
+    for name in all_names:
+        match = re.match(r"^(.*\.experts)\.\d+\.(?:w1|w2|w3|gate_proj|up_proj|down_proj)$", name)
+        if match:
+            units.setdefault(match.group(1), set()).add(name)
+    for target, members in units.items():
+        chosen = members & mapped.keys()
+        if chosen and chosen != members:
+            raise ValueError(f"Partially quantized GPTQ fused unit: {target}")
+        if not chosen:
+            ignored.add(target)
+            continue
+        values = [mapped[name] for name in chosen]
+        if any(value != values[0] for value in values[1:]):
+            raise ValueError(f"Different GPTQ schemes within fused unit: {target}")
+        mapped[target] = dict(values[0])
+    return mapped, sorted(ignored)
+
+
+def _install_gptq_module_mapper(packed_mapping):
+    from functools import wraps
+    from vllm.model_executor.layers.quantization.auto_gptq import AutoGPTQConfig
+
+    original = AutoGPTQConfig.apply_vllm_mapper
+    if getattr(original, '_fl_module_schemes', False):
+        return
+
+    @wraps(original)
+    def apply_mapper(self, mapper):
+        original(self, mapper)
+        schemes = self.full_config.get('flagos_module_quantization')
+        if not schemes or not getattr(mapper, '_fl_deepseek_v4_mapper', False):
+            return
+        # Compressor writes canonical exact-match negatives. Decode those
+        # names, rather than running a tensor-name mapper on regex syntax.
+        ignored = []
+        for pattern in self.dynamic:
+            if not pattern.startswith('-:'):
+                continue
+            regex = pattern[2:]
+            name = re.sub(r'\\(.)', r'\1', regex[1:-1])
+            if regex != '^' + re.escape(name) + '$':
+                raise ValueError('FlagOS module-scheme export requires exact GPTQ exclusions')
+            ignored.append(name)
+        resolved, exclusions = map_gptq_module_schemes(schemes, ignored, mapper, packed_mapping)
+        baseline = {'bits': self.weight_bits, 'group_size': self.group_size}
+        self.dynamic = {f'-:^{re.escape(name)}$': {} for name in exclusions}
+        self.dynamic.update({f'+:^{re.escape(name)}$': value for name, value in resolved.items()
+                             if value != baseline})
+        self.full_config = {**self.full_config, 'dynamic': self.dynamic}
+
+    apply_mapper._fl_module_schemes = True
+    AutoGPTQConfig.apply_vllm_mapper = apply_mapper
+
+
 def hf_to_original_name(name: str) -> str:
     """Undo the Transformers namespace conversion without touching tensors."""
     name = name.removeprefix("model.")
@@ -64,6 +141,8 @@ def install_deepseek_v4_hf_checkpoint():
         return True
 
     class HFCheckpointMapper(WeightsMapper):
+        _fl_deepseek_v4_mapper = True
+
         def __init__(self, original):
             super().__init__()
             self.original = original
@@ -91,4 +170,5 @@ def install_deepseek_v4_hf_checkpoint():
         "fused_wqa_wkv": ["wq_a", "wkv"],
         "fused_wkv_wgate": ["wkv", "wgate"],
     }
+    _install_gptq_module_mapper(cls.packed_modules_mapping)
     return True
