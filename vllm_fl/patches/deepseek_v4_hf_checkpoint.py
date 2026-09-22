@@ -71,6 +71,12 @@ def install_deepseek_v4_hf_checkpoint():
         def _map_name(self, key):
             return self.original._map_name(hf_to_original_name(key))
 
+        def __or__(self, other):
+            # AutoWeightsLoader merges the FP8 KV-cache scale mapper here.
+            # The base implementation would return a plain WeightsMapper and
+            # discard both our HF conversion and the wrapped native mappings.
+            return HFCheckpointMapper(self.original | other)
+
     @wraps(factory)
     def make_mapper(expert_dtype):
         return HFCheckpointMapper(factory(expert_dtype))

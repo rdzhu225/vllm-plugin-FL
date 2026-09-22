@@ -112,3 +112,39 @@ def test_runtime_mapper_preserves_payload_and_selects_fused_quantized_layers():
     )
     assert module.install_deepseek_v4_hf_checkpoint()
     assert DeepseekV4ForCausalLM.hf_to_vllm_mapper is mapper
+
+
+def test_runtime_mapper_survives_fp8_cache_scale_composition():
+    pytest.importorskip("vllm")
+    from vllm.model_executor.layers.quantization.fp8 import Fp8Config
+    from vllm.model_executor.models.utils import WeightsMapper
+    from vllm.models.deepseek_v4.nvidia.model import DeepseekV4ForCausalLM
+
+    assert module.install_deepseek_v4_hf_checkpoint()
+    mapper = DeepseekV4ForCausalLM.hf_to_vllm_mapper
+    # AutoWeightsLoader combines its model mapper with a quantization-specific
+    # cache mapper. This used to erase the subclass's entire name conversion.
+    cache = Fp8Config().get_cache_scale_mapper()
+    combined = mapper | cache
+    names = [
+        "embed.weight",
+        "layers.0.attn.wq_a.scale",
+        "model.layers.0.self_attn.kv_proj.qweight",
+        "layers.0.k_proj.output_scale",
+    ]
+    expected = [
+        "model.embed_tokens.weight",
+        "model.layers.0.attn.wq_a.weight_scale_inv",
+        "model.layers.0.attn.wkv.qweight",
+        "model.layers.0.attn.k_scale",
+    ]
+    payload = object()
+    assert list(combined.apply((name, payload) for name in names)) == [
+        (name, payload) for name in expected
+    ]
+    assert combined.apply_list(names) == expected
+    assert combined.apply_dict(dict.fromkeys(names, payload)) == dict.fromkeys(
+        expected, payload
+    )
+    assert (combined | WeightsMapper()).apply_list(names) == expected
+    assert mapper.apply_list(["embed.weight"]) == ["model.embed_tokens.weight"]
