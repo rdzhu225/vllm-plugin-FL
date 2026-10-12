@@ -135,7 +135,8 @@ class PlatformFL(Platform):
 
     @classmethod
     def is_arch_support_pdl(cls) -> bool:
-        if cls.vendor_name != "nvidia":
+        # NVIDIA PDL capability is shared with the official main implementation.
+        if cls.vendor_name != "nvidia" or cls.device_type != "cuda":
             return False
         try:
             major, _ = cls.torch_device_fn.get_device_capability()

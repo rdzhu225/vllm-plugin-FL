@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from vllm_fl.patches import qwen3_5_text as compat
 
 
@@ -114,3 +116,26 @@ def test_lazy_model_shim_keeps_existing_hf_to_vllm_mapper(monkeypatch):
     qwen3_5._patch_upstream_base()
 
     assert upstream.Qwen3_5ForCausalLMBase.hf_to_vllm_mapper is sentinel
+
+
+@pytest.mark.parametrize("architecture", ["Qwen3_5ForCausalLM", "Qwen3_5MoeForCausalLM"])
+def test_registered_text_model_exposes_native_text_mrope(architecture):
+    import torch
+    from vllm.model_executor.models.interfaces import supports_mrope
+    from vllm.model_executor.models.qwen3_vl import Qwen3VLForConditionalGeneration
+    from vllm_fl.models import qwen3_5
+
+    cls = getattr(qwen3_5, architecture)
+    model = cls.__new__(cls)
+    torch.nn.Module.__init__(model)
+    assert supports_mrope(model)
+    tokens = list(range(37))
+    config = SimpleNamespace(video_token_id=100, vision_start_token_id=101,
+        vision_end_token_id=102, vision_config=SimpleNamespace(spatial_merge_size=2))
+    expected, expected_delta = Qwen3VLForConditionalGeneration._get_mrope_input_positions(
+        tokens, [], config)
+    actual, delta = model.get_mrope_input_positions(tokens, [])
+    torch.testing.assert_close(actual, expected)
+    assert delta == expected_delta == 0
+    with pytest.raises(ValueError, match="multimodal"):
+        model.get_mrope_input_positions(tokens, [object()])

@@ -47,6 +47,18 @@ def _get_mamba_state_copy_func(cls):
     return MambaStateCopyFuncCalculator.gated_delta_net_state_copy_func()
 
 
+def _get_mrope_input_positions(self, input_tokens, mm_features):
+    """Match the upstream VL model's three identical axes for text-only input."""
+    if mm_features:
+        raise ValueError("Qwen3.5 text-only checkpoints do not accept multimodal features")
+    if not input_tokens:
+        raise ValueError("M-RoPE requires a non-empty text prompt")
+    import torch
+
+    positions = torch.arange(len(input_tokens), dtype=torch.long).repeat(3, 1)
+    return positions, 0
+
+
 # Some Qwen3.5 text-only checkpoints retain a VL architecture and store language
 # weights under ``model.language_model.*``. Unlike the VL classes there is no
 # ``language_model`` submodule wrapper on the text-only classes, so the target
@@ -82,6 +94,13 @@ def _patch_upstream_base() -> None:
     for name, helper in helpers.items():
         if not hasattr(base, name):
             setattr(base, name, classmethod(helper))
+
+    # Text checkpoints can retain mrope_section in their RoPE configuration.
+    # The worker then requires this protocol even though there is no vision
+    # tower. Text tokens use identical temporal/height/width positions.
+    if not hasattr(base, "get_mrope_input_positions"):
+        base.get_mrope_input_positions = _get_mrope_input_positions
+    base.supports_mrope = True
 
     # Remap quantization metadata together with checkpoint tensor names.
     base.load_weights = _load_weights
