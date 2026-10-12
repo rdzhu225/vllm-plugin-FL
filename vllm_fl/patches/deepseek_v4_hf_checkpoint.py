@@ -71,6 +71,8 @@ def _install_gptq_module_mapper(packed_mapping):
             ignored.append(name)
         resolved, exclusions = map_gptq_module_schemes(schemes, ignored, mapper, packed_mapping)
         baseline = {'bits': self.weight_bits, 'group_size': self.group_size}
+        if any('sym' in settings for settings in schemes.values()):
+            baseline['sym'] = self.is_sym
         self.dynamic = {f'-:^{re.escape(name)}$': {} for name in exclusions}
         self.dynamic.update({f'+:^{re.escape(name)}$': value for name, value in resolved.items()
                              if value != baseline})

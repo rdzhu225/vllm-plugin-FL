@@ -217,3 +217,24 @@ def test_actual_auto_gptq_config_applies_hf_and_fused_bit_overrides():
     assert get_dynamic_override(config, 'model.layers.0.ffn.experts', 'bits', 4) == 4
     override_config(config, 'model.layers.0.attn.fused_wqa_wkv')
     assert config.weight_bits == 8 and config.pack_factor == 4
+
+
+def test_actual_awq_mixed_config_preserves_symmetry_after_mapping():
+    pytest.importorskip('vllm')
+    from vllm.model_executor.layers.quantization.auto_gptq import AutoGPTQConfig
+    from vllm.model_executor.layers.quantization.utils.gptq_utils import override_config
+    from vllm.models.deepseek_v4.nvidia.model import DeepseekV4ForCausalLM
+    assert module.install_deepseek_v4_hf_checkpoint()
+    # vLLM 0.24 AutoGPTQ kernels support symmetric W4 and W8. AWQ uses
+    # --no-awq-zero-point for this runtime, independently of its packing ABI.
+    schemes = {name: {**value, 'sym': True} for name, value in _mixed_schemes().items()}
+    cfg = AutoGPTQConfig.from_config({'bits': 4, 'group_size': 128, 'desc_act': False, 'sym': True,
+        'algorithm': 'awq', 'modules_in_block_to_quantize': list(schemes),
+        'flagos_module_quantization': schemes, 'dynamic': {}})
+    cfg.apply_vllm_mapper(DeepseekV4ForCausalLM.hf_to_vllm_mapper)
+    from copy import deepcopy
+    for prefix in ['model.layers.0.attn.fused_wqa_wkv', 'model.layers.0.ffn.shared_experts.gate_up_proj']:
+        local = deepcopy(cfg); override_config(local, prefix)
+        assert local.weight_bits == 8 and local.is_sym is True
+    local = deepcopy(cfg); override_config(local, 'model.layers.0.ffn.experts.routed_experts')
+    assert local.weight_bits == 4 and local.is_sym is True
